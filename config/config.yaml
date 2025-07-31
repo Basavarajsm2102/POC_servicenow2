@@ -1,0 +1,15 @@
+servicenow:
+  instance: "dev293895"
+  url: "https://{instance}.service-now.com/api/now/table/incident"
+  username: "admin"
+snowflake:
+  account: "FDAPBEA-MA48001"
+  user: "BASAVARAJSM"
+  database: "poc_db"
+  schema: "poc_schema"
+  warehouse: "poc_warehouse"
+  table: "incident_test"
+s3:
+  bucket: "poc-bucket-2102"
+  prefix: "tickets/"
+  region: "us-east-1"  # Replace with your AWS region if different
