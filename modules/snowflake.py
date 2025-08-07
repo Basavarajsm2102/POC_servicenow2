@@ -47,9 +47,31 @@ class SnowflakeLoader:
             print(f"Error fetching latest created_on: {e}")
             return None
 
+    def get_latest_updated_on(self):
+        """Get the latest sys_updated_on timestamp from Snowflake table."""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute(f"SHOW TABLES LIKE '{self.config['snowflake']['table']}' IN {self.config['snowflake']['database']}.{self.config['snowflake']['schema']}")
+            if not cursor.fetchone():
+                print("Table does not exist, no latest updated_on timestamp")
+                return None
+
+            cursor.execute(f'SELECT MAX("sys_updated_on") AS max_updated_on FROM {self.config["snowflake"]["database"]}.{self.config["snowflake"]["schema"]}.{self.config["snowflake"]["table"]}')
+            result = cursor.fetchone()
+            print(f"Raw result from fetchone for updated_on: {result}")  # For debugging
+            latest_timestamp = result[0] if result else None  # Positional access
+            if latest_timestamp:
+                print(f"Latest updated_on in Snowflake: {latest_timestamp}")
+                return latest_timestamp
+            else:
+                print("No data in table for updated_on, using None")
+                return None
+        except Exception as e:
+            print(f"Error fetching latest updated_on: {e}")
+            return None
+
     def create_table(self, sample_df=None):
         """Create table dynamically based on sample DataFrame columns or inferred structure, escaping reserved keywords."""
-        # Note: Since we're loading from Parquet now, we pass a sample_df if available for schema inference.
         conn = self.conn
         try:
             cursor = conn.cursor()
@@ -153,7 +175,7 @@ class SnowflakeLoader:
             FROM (SELECT {select_sql} FROM @s3_stage/{relative})
             FILE_FORMAT = (TYPE = 'PARQUET')
             ON_ERROR = 'CONTINUE'
-            PURGE = TRUE;  -- Optional: Remove the file from stage after loading
+            PURGE = TRUE;
             """
             cursor.execute(copy_sql)
             print(f"Copied data into temp table from S3 Parquet: {relative}")

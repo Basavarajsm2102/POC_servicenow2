@@ -11,27 +11,46 @@ class ServiceNowClient:
         self.session.auth = (config["servicenow"]["username"], password)
         self.session.headers.update({"Accept": "application/json"})
 
-    def fetch_tickets(self, latest_created_on=None):
-        """Fetch tickets from ServiceNow, optionally after latest_created_on."""
+    def fetch_tickets(self, latest_created_on=None, latest_updated_on=None):
+        """Fetch tickets from ServiceNow, including new and updated ones, with pagination."""
         try:
-            params = {
-                "sysparm_limit": 2000,  # Adjust if you want more; add pagination for large sets
-                "sysparm_query": "ORDERBYDESCsys_created_on"
-            }
+            all_data = []
+            offset = 0
+            limit = 1000  # Batch size for pagination; adjust as needed
+            while True:
+                params = {
+                    "sysparm_query": "ORDERBYDESCsys_updated_on",  # Order by update time
+                    "sysparm_limit": limit,
+                    "sysparm_offset": offset
+                }
 
-            if latest_created_on:
-                timestamp_str = latest_created_on.strftime("%Y-%m-%d %H:%M:%S")
-                params["sysparm_query"] += f"^sys_created_on>{timestamp_str}"  # Strict > to avoid duplicates
+                query_parts = []
+                if latest_created_on:
+                    timestamp_str = latest_created_on.strftime("%Y-%m-%d %H:%M:%S")
+                    query_parts.append(f"sys_created_on>{timestamp_str}")  # New tickets
+                if latest_updated_on:
+                    timestamp_str = latest_updated_on.strftime("%Y-%m-%d %H:%M:%S")
+                    query_parts.append(f"sys_updated_on>{timestamp_str}")  # Updated tickets
 
-            response = self.session.get(self.base_url, params=params)
-            response.raise_for_status()
-            data = response.json().get("result", [])
-            if not data:
-                print("No new tickets found from ServiceNow")
+                if query_parts:
+                    params["sysparm_query"] += "^" + "^OR".join(query_parts)  # Combine with OR
+
+                response = self.session.get(self.base_url, params=params)
+                response.raise_for_status()
+                batch_data = response.json().get("result", [])
+                if not batch_data:
+                    break  # No more records
+
+                all_data.extend(batch_data)
+                offset += limit
+                print(f"Fetched batch of {len(batch_data)} tickets (total so far: {len(all_data)})")
+
+            if not all_data:
+                print("No new or updated tickets found from ServiceNow")
                 return pd.DataFrame()
 
             # Convert to DataFrame
-            df = pd.DataFrame(data)
+            df = pd.DataFrame(all_data)
 
             # Dynamically preprocess any column containing dictionaries (extract sys_id)
             for col in df.columns:
@@ -55,7 +74,7 @@ class ServiceNowClient:
                     print(f"Error: Column '{col}' still contains dictionaries after preprocessing")
                     raise ValueError(f"Column '{col}' contains unhandled dictionary values")
 
-            print(f"Retrieved {len(df)} tickets from ServiceNow")
+            print(f"Retrieved {len(df)} tickets from ServiceNow (new/updated)")
             return df
 
         except Exception as e:

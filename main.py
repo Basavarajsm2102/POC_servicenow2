@@ -15,8 +15,10 @@ def load_config():
 def run_servicenow(config, password):
     """Fetch tickets from ServiceNow."""
     client = ServiceNowClient(config, password)
-    latest_created_on = SnowflakeLoader(config).get_latest_created_on()
-    df = client.fetch_tickets(latest_created_on)
+    loader = SnowflakeLoader(config)
+    latest_created_on = loader.get_latest_created_on()
+    latest_updated_on = loader.get_latest_updated_on()
+    df = client.fetch_tickets(latest_created_on, latest_updated_on)
     return df
 
 def main():
